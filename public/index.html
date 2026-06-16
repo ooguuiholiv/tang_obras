@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Obra Ponto - Monitor de Alocação de Funcionários</title>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet.js Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="app-container hidden" id="appContainer">
+        <!-- Sidebar/Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <div class="logo-icon"><i class="fa-solid fa-location-dot"></i></div>
+                <div class="logo-text">
+                    <h1>TangObras</h1>
+                    <span>Monitor de Alocação</span>
+                </div>
+            </div>
+            <div class="header-right">
+                <div class="system-status" id="systemStatus">
+                    <span class="status-indicator idle"></span>
+                    <span class="status-text">Buscando status...</span>
+                </div>
+                <div class="header-user-actions">
+                    <span id="userEmailDisplay"><i class="fa-regular fa-user"></i> ...</span>
+                    <button class="btn btn-outline btn-logout" id="btnLogout"><i class="fa-solid fa-sign-out-alt"></i> Sair</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Layout -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: Config & Stats -->
+            <section class="panel-left">
+                <!-- Status & Configuration Card -->
+                <div class="card glass-card config-card" id="configCard">
+                    <h2><i class="fa-solid fa-sliders"></i> Configuração Ativa</h2>
+                    <div class="config-details">
+                        <div class="config-item">
+                            <span class="label">Limite de Distância:</span>
+                            <span class="value" id="cfgDistance">-- km</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Horário de Verificação:</span>
+                            <span class="value" id="cfgCron">--:--</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">WhatsApp Notificado:</span>
+                            <span class="value" id="cfgPhone">--</span>
+                        </div>
+                        <div class="config-item">
+                            <span class="label">Tipo de API:</span>
+                            <span class="value text-uppercase" id="cfgApiType">--</span>
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary btn-block" id="btnRunCheck">
+                        <span class="btn-content">
+                            <i class="fa-solid fa-rotate"></i> Verificar Agora
+                        </span>
+                        <span class="spinner hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                    </button>
+                </div>
+
+                <!-- Last Check Stats Card -->
+                <div class="card glass-card stats-card" id="statsCard">
+                    <h2><i class="fa-solid fa-chart-simple"></i> Última Verificação</h2>
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="number" id="statEmployees">0</span>
+                            <span class="label">Funcionários</span>
+                        </div>
+                        <div class="stat-box warning">
+                            <span class="number" id="statAlerts">0</span>
+                            <span class="label">Desvios (&gt;50km)</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="number" id="statYesterdayPunches">0</span>
+                            <span class="label">Pontos Ontem</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="number" id="statTodayPunches">0</span>
+                            <span class="label">Pontos Hoje</span>
+                        </div>
+                    </div>
+                    <div class="stats-time">
+                        <span>Verificado em: <strong id="statLastRunTime">Nunca</strong></span>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- Center/Right Side: Interactive Map & Detailed Alerts -->
+            <section class="panel-right">
+                
+                <!-- Map Card -->
+                <div class="card glass-card map-card">
+                    <div class="card-header-actions">
+                        <h2><i class="fa-solid fa-map-location-dot"></i> Visualização de Desvios</h2>
+                        <span class="badge badge-danger" id="activeAlertCount">0 Desvios</span>
+                    </div>
+                    <div class="map-wrapper">
+                        <div id="map"></div>
+                    </div>
+                </div>
+
+                <!-- Alert Details Card -->
+                <div class="card glass-card alerts-details-card">
+                    <div class="tabs-header">
+                        <button class="tab-btn active" id="tabAlertsBtn">
+                            <i class="fa-solid fa-triangle-exclamation"></i> Desvios Críticos (<span id="tabAlertsCount">0</span>)
+                        </button>
+                        <button class="tab-btn" id="tabAllPunchesBtn">
+                            <i class="fa-solid fa-users"></i> Todos os Colaboradores (<span id="tabAllPunchesCount">0</span>)
+                        </button>
+                        <button class="tab-btn" id="tabObrasBtn">
+                            <i class="fa-solid fa-building-circle-check"></i> Obras & Alocações
+                        </button>
+                        <button class="tab-btn" id="tabReportBtn">
+                            <i class="fa-solid fa-file-invoice"></i> Relatório de Alocação
+                        </button>
+                    </div>
+
+                    <!-- Search and Day Filters (Visible on Tab All Punches) -->
+                    <div class="filters-panel hidden" id="filtersPanel">
+                        <div class="filter-group search-box-wrapper">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="employeeSearchInput" placeholder="Buscar colaborador pelo nome...">
+                        </div>
+                        <div class="filter-group select-box-wrapper">
+                            <label for="punchesDaySelect">Ver pontos de:</label>
+                            <select id="punchesDaySelect" class="form-select">
+                                <option value="today" selected>Hoje</option>
+                                <option value="yesterday">Ontem</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="alerts-container" id="alertsContainer">
+                        <!-- Populated dynamically -->
+                        <div class="empty-alerts">
+                            <div class="empty-icon"><i class="fa-solid fa-circle-check"></i></div>
+                            <h3>Nenhuma anomalia detectada</h3>
+                            <p>Todos os colaboradores bateram ponto próximos às localizações de ontem ou não há registros suficientes para comparação.</p>
+                        </div>
+                    </div>
+
+                    <!-- Obras & Allocations Section -->
+                    <div class="obras-container hidden" id="obrasContainer">
+                        <div class="obras-flex-layout">
+                            
+                            <!-- Left: Obras Register Form & List -->
+                            <div class="obras-section">
+                                <div class="section-title-header">
+                                    <h3><i class="fa-solid fa-helmet-safety"></i> Cadastro de Obras</h3>
+                                    <button class="btn btn-small" id="btnNewObra"><i class="fa-solid fa-plus"></i> Nova Obra</button>
+                                </div>
+                                
+                                <form id="obraForm" class="obra-form hidden">
+                                    <input type="hidden" id="obraId">
+                                    <div class="form-group">
+                                        <label for="obraName">Nome da Obra</label>
+                                        <input type="text" id="obraName" placeholder="Ex: Obra Central" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="obraAddress">Endereço</label>
+                                        <input type="text" id="obraAddress" placeholder="Rua, Número, Cidade">
+                                    </div>
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label for="obraLat">Latitude</label>
+                                            <input type="number" id="obraLat" step="any" placeholder="-19.9123" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="obraLng">Longitude</label>
+                                            <input type="number" id="obraLng" step="any" placeholder="-43.9345" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="obraRadius">Raio de Cerca (km)</label>
+                                            <input type="number" id="obraRadius" step="any" value="1.0" min="0.1" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-actions">
+                                        <button type="button" class="btn btn-outline btn-small" id="btnCancelObra">Cancelar</button>
+                                        <button type="submit" class="btn btn-primary btn-small" id="btnSaveObra">Salvar</button>
+                                    </div>
+                                </form>
+
+                                <div class="obras-list" id="obrasListContainer">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            
+                            <!-- Right: Employee Allocations -->
+                            <div class="allocations-section">
+                                <h3><i class="fa-solid fa-people-arrows"></i> Alocação de Colaboradores</h3>
+                                <div class="allocation-form-wrapper">
+                                    <form id="allocationForm" class="allocation-form">
+                                         <div class="form-group custom-select-container">
+                                             <label for="allocEmployeeSearch">Colaborador</label>
+                                             <div class="custom-select-wrapper">
+                                                 <input type="text" id="allocEmployeeSearch" placeholder="Buscar colaborador pelo nome..." autocomplete="off" required>
+                                                 <input type="hidden" id="allocEmployeeSelect" required>
+                                                 <div id="allocEmployeeDropdownList" class="custom-select-dropdown hidden">
+                                                     <!-- Filtered employee list -->
+                                                 </div>
+                                             </div>
+                                         </div>
+                                        <div class="form-group">
+                                            <label for="allocObraSelect">Obra Alocada</label>
+                                            <select id="allocObraSelect" class="form-select" required>
+                                                <option value="" disabled selected>Selecione uma obra...</option>
+                                            </select>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-block">Salvar Alocação</button>
+                                    </form>
+                                </div>
+                                <div class="allocations-list" id="allocationsListContainer">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Seção do Relatório de Período -->
+                    <div class="report-container hidden" id="reportContainer">
+                        <div class="report-filter-bar">
+                            <form id="reportForm" class="report-date-form">
+                                <div class="form-group">
+                                    <label for="reportStartDate">Data Inicial</label>
+                                    <input type="date" id="reportStartDate" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="reportEndDate">Data Final</label>
+                                    <input type="date" id="reportEndDate" required>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="btnGenerateReport">
+                                    <span class="btn-content"><i class="fa-solid fa-sync"></i> Gerar Relatório</span>
+                                    <span class="spinner hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                                </button>
+                            </form>
+                            
+                            <div class="report-actions-wrapper hidden" id="reportActions">
+                                <div class="search-box-wrapper" style="margin-bottom: 0; min-width: 250px;">
+                                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                    <input type="text" id="reportSearchInput" placeholder="Filtrar funcionário por nome...">
+                                </div>
+                                <button class="btn btn-outline" id="btnExportReport">
+                                    <i class="fa-solid fa-file-csv"></i> Exportar Planilha CSV
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Aviso sobre períodos longos -->
+                        <div class="alert-box warning hidden" id="reportWarningBox">
+                            <i class="fa-solid fa-circle-exclamation"></i> 
+                            <span><strong>Período longo selecionado:</strong> Consultar mais de 31 dias pode demorar alguns minutos devido à paginação da API do Tangerino.</span>
+                        </div>
+
+                        <!-- Resultados do Relatório -->
+                        <div class="report-results" id="reportResultsContainer">
+                            <div class="empty-report">
+                                <div class="empty-icon"><i class="fa-solid fa-file-invoice"></i></div>
+                                <h3>Gerador de Relatório de Obras</h3>
+                                <p>Selecione um período acima e clique em "Gerar Relatório" para auditar em quais obras cada colaborador trabalhou de que dia a que dia.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+        </main>
+        
+        <footer class="app-footer">
+            <p>TangObras Monitoramento • Integrado com Sólides Tangerino e Evolution API</p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay hidden" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"><i class="fa-solid fa-compass fa-spin"></i></div>
+            <h2>Buscando Dados do Tangerino...</h2>
+            <p>Conectando à API Sólides Tangerino e coletando pontos de ontem e hoje. Isso pode levar alguns segundos devido à paginação dos registros.</p>
+        </div>
+    </div>
+
+    <!-- Login Overlay -->
+    <div class="login-overlay" id="loginOverlay">
+        <div class="login-card glass-card animate-in">
+            <div class="login-header">
+                <div class="login-logo-icon"><i class="fa-solid fa-fingerprint"></i></div>
+                <h1>FrancoSys</h1>
+                <p>TangObras - Autenticação</p>
+            </div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">E-mail</label>
+                    <input type="email" id="loginEmail" placeholder="seuemail@exemplo.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Código de Acesso</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block" id="btnLoginSubmit">
+                    <span class="btn-content">Autenticar <i class="fa-solid fa-key"></i></span>
+                    <span class="spinner hidden"><i class="fa-solid fa-circle-notch fa-spin"></i></span>
+                </button>
+            </form>
+            <div id="loginErrorMsg" class="login-error-msg hidden"></div>
+        </div>
+    </div>
+
+    <!-- Leaflet.js Map Script -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    
+    <!-- Custom JS -->
+    <script src="app.js"></script>
+</body>
+</html>

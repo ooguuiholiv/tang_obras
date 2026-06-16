@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FrancoSys | Gestão Avançada de Usuários</title>
+  <link rel="stylesheet" href="styles.css">
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+
+<body>
+  <div id="bg-overlay"></div>
+
+  <main id="app">
+    <!-- View: Login -->
+    <section id="login-view" class="hidden">
+      <div class="auth-card animate-in">
+        <div class="auth-header">
+          <h1 class="logo">FrancoSys</h1>
+          <p class="subtitle">Nexus Intelligence Systems</p>
+        </div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label>IDENTIFICAÇÃO</label>
+            <div class="input-wrapper">
+              <input type="email" name="email" placeholder="nome@exemplo.com" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>CÓDIGO DE ACESSO</label>
+            <div class="input-wrapper">
+              <input type="password" name="senha" placeholder="••••••••" required>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary">
+            AUTENTICAR <i class="ph ph-fingerprint"></i>
+          </button>
+        </form>
+
+        <div id="login-msg" class="msg"></div>
+      </div>
+    </section>
+
+    <!-- View: Dashboard -->
+    <section id="dashboard-view" class="hidden animate-in">
+      <header class="topbar">
+        <div class="topbar-info">
+          <h1 class="logo" style="font-size: 24px;">FrancoSys</h1>
+          <small id="user-display">Bem-vindo ao sistema de controle</small>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-new" class="btn btn-primary btn-sm">
+            NOVO USUÁRIO <i class="ph ph-plus-circle"></i>
+          </button>
+          <button id="btn-logout" class="btn btn-outline btn-sm">
+            SAIR <i class="ph ph-sign-out"></i>
+          </button>
+        </div>
+      </header>
+
+      <section class="table-container">
+        <div class="table-header">
+          <h2 style="font-family: var(--font-heading);">Terminal de Usuários</h2>
+          <div class="search-box">
+            <i class="ph ph-magnifying-glass"></i>
+            <input type="text" id="search" placeholder="Filtrar registros...">
+          </div>
+        </div>
+
+        <div style="overflow-x: auto;">
+          <table id="users-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Contato</th>
+                <th>Corporação</th>
+                <th>Endereço Digital</th>
+                <th>Operações</th>
+              </tr>
+            </thead>
+            <tbody>
+              <!-- Dinâmico -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <!-- Modal Form -->
+    <div id="modal" class="modal-overlay hidden">
+      <div class="modal-content animate-in">
+        <h3 id="modal-title">Novo Registro</h3>
+        <form id="user-form">
+          <div class="grid-2">
+            <div class="form-group">
+              <label>NOME</label>
+              <input name="nome" placeholder="Ex: John" required>
+            </div>
+            <div class="form-group">
+              <label>SOBRENOME</label>
+              <input name="sobrenome" placeholder="Ex: Doe">
+            </div>
+          </div>
+
+          <div class="grid-2">
+            <div class="form-group">
+              <label>EMPRESA</label>
+              <input name="empresa" placeholder="Ex: CyberDyne Inc.">
+            </div>
+            <div class="form-group">
+              <label>SITE</label>
+              <input name="site" placeholder="Ex: www.cyberdyne.com">
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>EMAIL</label>
+            <input type="email" name="email" placeholder="contato@exemplo.com" required>
+          </div>
+
+          <div class="form-group">
+            <label>SENHA</label>
+            <input type="password" name="senha" placeholder="Mínimo 6 caracteres">
+            <small style="color: var(--text-muted); font-size: 11px; margin-top: 4px; display: block;">
+              * Deixe em branco para manter a senha atual ao editar.
+            </small>
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" id="modal-cancel" class="btn btn-outline btn-sm">CANCELAR</button>
+            <button type="submit" class="btn btn-primary btn-sm">GRAVAR DADOS <i class="ph ph-floppy-disk"></i></button>
+          </div>
+        </form>
+        <div id="modal-msg" class="msg"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Configura a base da API dinamicamente
+    window.API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      ? 'http://localhost:3000/api'
+      : window.location.origin + '/api';
+  </script>
+  <script src="app.js"></script>
+</body>
+
+</html>

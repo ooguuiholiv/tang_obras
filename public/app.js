@@ -601,9 +601,9 @@ function renderAllPunchesDetails(run) {
             const timeStr = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
             
             // Check if this punch triggered an alert
-            const isAlert = run.alerts.some(a => 
-                a.employeeId === String(punch.employeeId) && 
-                (a.todayPunch.punchId === punch.punchId || a.yesterdayPunch.punchId === punch.punchId)
+            const isAlert = run.alerts && run.alerts.some(a => 
+                String(a.employeeId) === String(punch.employeeId) && 
+                a.pontoBatido && String(a.pontoBatido.punchId) === String(punch.punchId)
             );
             
             const card = document.createElement('div');
@@ -788,9 +788,9 @@ function renderAllPunchesMap(punches, alerts) {
         bounds.push([lat, lng]);
         
         // Check if this punch is associated with a location discrepancy
-        const isAlert = alerts.some(a => 
-            a.employeeId === String(punch.employeeId) && 
-            (a.todayPunch.punchId === punch.punchId || a.yesterdayPunch.punchId === punch.punchId)
+        const isAlert = alerts && alerts.some(a => 
+            String(a.employeeId) === String(punch.employeeId) && 
+            a.pontoBatido && String(a.pontoBatido.punchId) === String(punch.punchId)
         );
         
         let fillColor = '#10b981'; // Green for normal punches

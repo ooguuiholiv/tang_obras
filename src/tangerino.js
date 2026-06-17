@@ -10,7 +10,7 @@ const BASE_URL = 'https://apis.tangerino.com.br/punch';
  * @param {Date} endDate End date
  * @returns {Promise<Array>} List of all punches in the period
  */
-async function fetchAllPunches(startDate, endDate) {
+async function fetchAllPunches(startDate, endDate, employeeId = null) {
     if (!TANGERINO_AUTH) {
         throw new Error('TANGERINO_AUTH is not configured in environmental variables.');
     }
@@ -23,10 +23,13 @@ async function fetchAllPunches(startDate, endDate) {
     let allPunches = [];
     let totalPages = 1;
 
-    console.log(`Starting fetch of punches from ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    console.log(`Starting fetch of punches from ${startDate.toISOString()} to ${endDate.toISOString()}${employeeId ? ` for employee ${employeeId}` : ''}`);
 
     do {
-        const url = `${BASE_URL}/?startDateInMillis=${startMillis}&endDateInMillis=${endMillis}&size=${size}&page=${page}`;
+        let url = `${BASE_URL}/?startDateInMillis=${startMillis}&endDateInMillis=${endMillis}&size=${size}&page=${page}`;
+        if (employeeId) {
+            url += `&employeeId=${employeeId}`;
+        }
         console.log(`Fetching Tangerino page ${page}...`);
         
         const response = await fetch(url, {

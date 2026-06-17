@@ -73,6 +73,13 @@ const allocEmployeeDropdownList = document.getElementById('allocEmployeeDropdown
 const allocObraSelect = document.getElementById('allocObraSelect');
 const allocationsListContainer = document.getElementById('allocationsListContainer');
 
+// Elementos de Trajeto do Colaborador
+const trajectorySection = document.getElementById('trajectorySection');
+const trajectorySummary = document.getElementById('trajectorySummary');
+const trajectoryDateFilter = document.getElementById('trajectoryDateFilter');
+const trajectoryListContainer = document.getElementById('trajectoryListContainer');
+const btnClearTrajectory = document.getElementById('btnClearTrajectory');
+
 // Sub-abas de Obras & Contratos Elements
 const subTabContractsBtn = document.getElementById('subTabContractsBtn');
 const subTabObrasBtn = document.getElementById('subTabObrasBtn');
@@ -371,6 +378,11 @@ async function loadRealTimeData() {
 // Switch between dashboard tabs
 function switchTab(tab) {
     activeTab = tab;
+    
+    // Hide trajectory section if open when switching tabs
+    if (trajectorySection) {
+        trajectorySection.classList.add('hidden');
+    }
     
     // Reset buttons
     tabAlertsBtn.classList.remove('active');
@@ -890,6 +902,10 @@ function setupObrasListeners() {
     allocEmployeeSearch.addEventListener('focus', showEmployeeDropdown);
     allocEmployeeSearch.addEventListener('input', filterEmployeeDropdown);
     
+    // Listeners do Trajeto de Colaborador
+    btnClearTrajectory.addEventListener('click', clearTrajectoryView);
+    trajectoryDateFilter.addEventListener('change', handleTrajectoryFilterChange);
+
     // Close dropdown when clicking outside
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.custom-select-container')) {
@@ -939,6 +955,7 @@ function renderEmployeeDropdownList(list) {
             allocEmployeeSearch.value = emp.name;
             selectedEmployeeName = emp.name;
             allocEmployeeDropdownList.classList.add('hidden');
+            loadEmployeeTrajectory(emp.id);
         });
         
         allocEmployeeDropdownList.appendChild(item);
@@ -1022,7 +1039,7 @@ function renderAllocationsList() {
         const card = document.createElement('div');
         card.className = 'alloc-item-card';
         card.innerHTML = `
-            <div class="alloc-item-info">
+            <div class="alloc-item-info" onclick="selectEmployeeForTrajectory('${a.employee_id}', '${a.employee_name.replace(/'/g, "\\'")}')" style="cursor: pointer;">
                 <span class="alloc-item-emp">${a.employee_name}</span>
                 <span class="alloc-item-meta">Alocado na obra: <strong class="alloc-item-obra-name">${a.obra_name}</strong></span>
             </div>
@@ -1301,6 +1318,13 @@ function switchSubTab(subTab) {
     } else if (subTab === 'allocations') {
         subTabAllocationsBtn.classList.add('active');
         subTabAllocationsContainer.classList.remove('hidden');
+    }
+    
+    if (subTab !== 'allocations') {
+        if (trajectorySection) {
+            trajectorySection.classList.add('hidden');
+        }
+        renderTabContent();
     }
 }
 
@@ -1601,4 +1625,311 @@ function renderEmptyReport() {
             <p>Selecione um período acima e clique em "Gerar Relatório" para auditar as alocações dos colaboradores.</p>
         </div>
     `;
+}
+
+// --- LÓGICA DO TRAJETO DE 45 DIAS ---
+
+let currentEmployeeTrajectory = null; // Guardar dados do trajeto atual em cache local
+
+window.selectEmployeeForTrajectory = function(employeeId, employeeName) {
+    allocEmployeeSelect.value = employeeId;
+    allocEmployeeSearch.value = employeeName;
+    selectedEmployeeName = employeeName;
+    loadEmployeeTrajectory(employeeId);
+};
+
+async function loadEmployeeTrajectory(employeeId) {
+    if (!employeeId) return;
+    
+    trajectorySection.classList.remove('hidden');
+    trajectorySummary.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; justify-content: center; padding: 10px;">
+            <i class="fa-solid fa-spinner fa-spin" style="color: var(--primary);"></i>
+            <span>Carregando trajeto dos últimos 45 dias...</span>
+        </div>
+    `;
+    trajectoryListContainer.innerHTML = '';
+    trajectoryDateFilter.innerHTML = '';
+    
+    try {
+        const response = await authenticatedFetch(`/api/employees/${employeeId}/trajectory?days=45`);
+        const result = await response.json();
+        
+        if (result.success) {
+            currentEmployeeTrajectory = result;
+            const punches = result.punches || [];
+            
+            // Atualizar o resumo
+            const hasObra = result.obraAlocada;
+            trajectorySummary.innerHTML = `
+                <span class="trajectory-summary-name">${result.employeeName}</span>
+                <span class="trajectory-summary-alloc">
+                    <i class="fa-solid fa-helmet-safety" style="color: ${hasObra ? 'var(--warning)' : 'var(--text-muted)'};"></i>
+                    ${hasObra ? `Alocado em: <strong>${result.obraAlocada.name}</strong>` : 'Sem Obra Alocada'}
+                </span>
+            `;
+            
+            if (punches.length === 0) {
+                trajectoryListContainer.innerHTML = `
+                    <div class="trajectory-status">
+                        Nenhuma batida de ponto encontrada nos últimos 45 dias.
+                    </div>
+                `;
+                // Limpar apenas o markersLayer do mapa
+                markersLayer.clearLayers();
+                return;
+            }
+            
+            // Preencher o select de filtros de data
+            trajectoryDateFilter.innerHTML = `
+                <option value="all">Todo o período (${punches.length} batidas)</option>
+                <option value="7">Últimos 7 dias</option>
+                <option value="15">Últimos 15 dias</option>
+                <option value="30">Últimos 30 dias</option>
+            `;
+            
+            // Encontrar datas únicas e adicionar ao select
+            const dates = new Set();
+            punches.forEach(p => {
+                if (p.date) dates.add(p.date);
+            });
+            
+            // Ordenar datas decrescentemente
+            const sortedDates = Array.from(dates).sort((a, b) => new Date(b) - new Date(a));
+            sortedDates.forEach(dateStr => {
+                const opt = document.createElement('option');
+                opt.value = `date:${dateStr}`;
+                // Converter de AAAA-MM-DD para DD/MM/AAAA
+                const formattedDate = dateStr.split('-').reverse().join('/');
+                opt.textContent = formattedDate;
+                trajectoryDateFilter.appendChild(opt);
+            });
+            
+            // Renderizar tudo com a opção "all" por padrão
+            renderFilteredTrajectory('all');
+            
+        } else {
+            trajectorySummary.innerHTML = `<span style="color: var(--danger);">Erro: ${result.error || 'Erro ao carregar trajeto.'}</span>`;
+        }
+    } catch (e) {
+        console.error('Erro ao buscar trajeto:', e);
+        trajectorySummary.innerHTML = `<span style="color: var(--danger);">Erro ao conectar ao servidor.</span>`;
+    }
+}
+
+function renderFilteredTrajectory(filterValue) {
+    if (!currentEmployeeTrajectory) return;
+    
+    const punches = currentEmployeeTrajectory.punches || [];
+    let filteredPunches = [];
+    
+    if (filterValue === 'all') {
+        filteredPunches = punches;
+    } else if (filterValue === '7' || filterValue === '15' || filterValue === '30') {
+        const daysLimit = parseInt(filterValue);
+        const limitDate = new Date();
+        limitDate.setDate(limitDate.getDate() - daysLimit);
+        filteredPunches = punches.filter(p => new Date(p.timestamp) >= limitDate);
+    } else if (filterValue.startsWith('date:')) {
+        const dateStr = filterValue.replace('date:', '');
+        filteredPunches = punches.filter(p => p.date === dateStr);
+    }
+    
+    // Renderizar a lista na lateral
+    renderTrajectoryList(filteredPunches);
+    
+    // Desenhar no mapa
+    renderTrajectoryOnMap(filteredPunches, currentEmployeeTrajectory.employeeName, currentEmployeeTrajectory.obraAlocada);
+}
+
+function handleTrajectoryFilterChange(e) {
+    renderFilteredTrajectory(e.target.value);
+}
+
+function renderTrajectoryList(punches) {
+    trajectoryListContainer.innerHTML = '';
+    
+    punches.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = 'trajectory-item';
+        item.dataset.punchId = p.punchId;
+        
+        // Converter data de AAAA-MM-DD para DD/MM/AAAA
+        const formattedDate = p.date.split('-').reverse().join('/');
+        // Extrair hora do timestamp
+        const timeStr = new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        let geofenceBadgeHtml = '';
+        if (p.geofenceStatus === 'inside') {
+            geofenceBadgeHtml = `<span class="trajectory-item-badge" style="background: rgba(16, 185, 129, 0.12); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2);"><i class="fa-solid fa-circle-check"></i> Dentro do local</span>`;
+        } else if (p.geofenceStatus === 'outside') {
+            geofenceBadgeHtml = `<span class="trajectory-item-badge" style="background: rgba(239, 68, 68, 0.12); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2);"><i class="fa-solid fa-triangle-exclamation"></i> Fora da obra (${p.allocatedObraDistance} km)</span>`;
+        } else {
+            geofenceBadgeHtml = `<span class="trajectory-item-badge" style="background: rgba(255, 255, 255, 0.05); color: var(--text-secondary); border: 1px solid var(--border-color);"><i class="fa-solid fa-circle-question"></i> Sem Alocação</span>`;
+        }
+        
+        item.innerHTML = `
+            <div class="trajectory-item-top">
+                <span class="trajectory-item-date"><span style="color: var(--primary); font-weight: 700; margin-right: 6px;">#${idx + 1}</span> ${formattedDate} ${timeStr}</span>
+                <span class="trajectory-item-type ${p.type === 'IN' ? 'in' : 'out'}">${p.type === 'IN' ? 'Entrada' : 'Saída'}</span>
+            </div>
+            <div class="trajectory-item-addr" title="${p.address}">${p.address}</div>
+            ${geofenceBadgeHtml}
+        `;
+        
+        item.addEventListener('click', () => {
+            // Remover active de outros itens
+            document.querySelectorAll('.trajectory-item').forEach(el => el.classList.remove('active'));
+            item.classList.add('active');
+            
+            // Focar ponto no mapa
+            focusPunchOnMap(p.punchId, p.latitude, p.longitude);
+        });
+        
+        trajectoryListContainer.appendChild(item);
+    });
+}
+
+function focusPunchOnMap(punchId, lat, lng) {
+    if (!map) return;
+    map.setView([lat, lng], 16);
+    
+    // Achar o marcador correspondente no mapa e abrir popup
+    markersLayer.eachLayer(layer => {
+        if (layer.options && layer.options.id === punchId) {
+            layer.openPopup();
+        }
+    });
+}
+
+function renderTrajectoryOnMap(punches, employeeName, obraAlocada) {
+    if (!map) return;
+    markersLayer.clearLayers();
+    
+    const bounds = L.latLngBounds();
+    
+    // 1. Agrupar batidas por dia para desenhar linhas cronológicas (linhas diárias para não parecer bagunça)
+    const punchesByDay = {};
+    punches.forEach(p => {
+        if (!punchesByDay[p.date]) {
+            punchesByDay[p.date] = [];
+        }
+        punchesByDay[p.date].push(p);
+    });
+    
+    // Desenhar as polilinhas diárias
+    Object.keys(punchesByDay).forEach(date => {
+        const dayPunches = punchesByDay[date];
+        if (dayPunches.length >= 2) {
+            const latlngs = dayPunches.map(p => [p.latitude, p.longitude]);
+            L.polyline(latlngs, {
+                color: 'rgba(139, 92, 246, 0.55)', // Roxo translúcido moderno
+                weight: 4,
+                dashArray: '5, 8',
+                interactive: false
+            }).addTo(markersLayer);
+        }
+    });
+    
+    // 2. Desenhar marcadores numerados cronologicamente
+    punches.forEach((p, index) => {
+        const latlng = [p.latitude, p.longitude];
+        bounds.extend(latlng);
+        
+        let color = 'var(--primary)';
+        if (p.geofenceStatus === 'inside') {
+            color = 'var(--success)';
+        } else if (p.geofenceStatus === 'outside') {
+            color = 'var(--danger)';
+        }
+        
+        const numberIcon = L.divIcon({
+            html: `<div class="map-trajectory-number" style="background-color: ${color};">${index + 1}</div>`,
+            className: 'custom-trajectory-icon',
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+        
+        const formattedDate = p.date.split('-').reverse().join('/');
+        const timeStr = new Date(p.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        
+        let statusText = '';
+        if (p.geofenceStatus === 'inside') {
+            statusText = `<span style="color: var(--success); font-weight: bold;">Dentro da cerca</span>`;
+        } else if (p.geofenceStatus === 'outside') {
+            statusText = `<span style="color: var(--danger); font-weight: bold;">Fora da cerca (${p.allocatedObraDistance} km)</span>`;
+        } else {
+            statusText = `<span style="color: var(--text-secondary);">Sem Alocação</span>`;
+        }
+        
+        const popupContent = `
+            <div class="map-popup-content" style="font-family: var(--font-body); font-size: 13px;">
+                <h4 style="margin: 0 0 6px 0; color: var(--primary); font-size: 14px;">Ponto #${index + 1} - ${employeeName}</h4>
+                <b>Data:</b> ${formattedDate} às ${timeStr}<br>
+                <b>Tipo:</b> ${p.type === 'IN' ? 'Entrada' : 'Saída'}<br>
+                <b>Localização:</b> ${p.address}<br>
+                <b>Obra Alocada:</b> ${p.allocatedObraName || 'Nenhuma'}<br>
+                <b>Status:</b> ${statusText}
+            </div>
+        `;
+        
+        const marker = L.marker(latlng, { 
+            icon: numberIcon,
+            id: p.punchId 
+        }).bindPopup(popupContent);
+        
+        // Abrir popup e destacar item da lista lateral ao clicar no marcador
+        marker.on('click', () => {
+            document.querySelectorAll('.trajectory-item').forEach(el => el.classList.remove('active'));
+            const listItem = document.querySelector(`.trajectory-item[data-punch-id="${p.punchId}"]`);
+            if (listItem) {
+                listItem.classList.add('active');
+                listItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+        });
+        
+        marker.addTo(markersLayer);
+    });
+    
+    // 3. Se houver obra alocada, desenhar destaque para ela
+    if (obraAlocada) {
+        const obraLatLng = [obraAlocada.latitude, obraAlocada.longitude];
+        bounds.extend(obraLatLng);
+        
+        // Círculo representando o raio real da obra alocada
+        L.circle(obraLatLng, {
+            radius: obraAlocada.radius_km * 1000, // em metros
+            color: '#3b82f6',
+            fillColor: '#3b82f6',
+            fillOpacity: 0.1,
+            weight: 2,
+            dashArray: '4, 6'
+        }).addTo(markersLayer);
+        
+        // Marcador central da obra
+        L.circleMarker(obraLatLng, {
+            radius: 8,
+            color: '#ffffff',
+            fillColor: '#3b82f6',
+            fillOpacity: 1,
+            weight: 2
+        }).bindPopup(`
+            <div style="font-family: var(--font-body); font-size: 13px;">
+                <h4 style="margin: 0 0 4px 0; color: #3b82f6;">Obra Alocada: ${obraAlocada.name}</h4>
+                <b>Endereço:</b> ${obraAlocada.address || 'Sem endereço'}<br>
+                <b>Cerca configurada:</b> ${obraAlocada.radius_km} km
+            </div>
+        `).addTo(markersLayer);
+    }
+    
+    // Centralizar e dar zoom no mapa
+    if (punches.length > 0) {
+        map.fitBounds(bounds, { padding: [50, 50] });
+    }
+}
+
+function clearTrajectoryView() {
+    trajectorySection.classList.add('hidden');
+    // Restaurar a visualização do mapa geral
+    renderTabContent();
 }

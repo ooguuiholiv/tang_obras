@@ -491,6 +491,87 @@ app.get('/api/report', async (req, res) => {
     }
 });
 
+/**
+ * Rota para consultar o trajeto de um funcionário específico nos últimos N dias (padrão 45 dias)
+ */
+app.get('/api/employees/:employeeId/trajectory', async (req, res) => {
+    const { employeeId } = req.params;
+    const days = parseInt(req.query.days || '45');
+    
+    try {
+        console.log(`Buscando trajeto do funcionário ${employeeId} nos últimos ${days} dias...`);
+        
+        // Calcular intervalo de datas
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - days);
+        
+        // Ajustar horas
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
+        
+        // Buscar batidas no Tangerino para o período filtrando por employeeId
+        const rawPunches = await tangerino.fetchAllPunches(startDate, endDate, employeeId);
+        let parsedPunches = tangerino.parsePunches(rawPunches);
+        
+        // Caso a API do Tangerino não filtre, filtramos aqui no backend para garantir
+        parsedPunches = parsedPunches.filter(p => String(p.employeeId) === String(employeeId));
+        
+        // Ordenar cronologicamente (da mais antiga para a mais recente)
+        parsedPunches.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+        
+        // Buscar a alocação atual do colaborador no banco SQLite
+        const allocation = await db.getAllocationForEmployee(employeeId);
+        
+        let obraAlocada = null;
+        if (allocation && allocation.obra_id) {
+            obraAlocada = await db.getObraById(allocation.obra_id);
+        }
+        
+        const { getDistance } = require('./src/distance');
+        
+        const enrichedPunches = parsedPunches.map(p => {
+            let distance = null;
+            let geofenceStatus = 'none';
+            
+            if (obraAlocada) {
+                distance = getDistance(
+                    p.latitude,
+                    p.longitude,
+                    obraAlocada.latitude,
+                    obraAlocada.longitude
+                );
+                distance = parseFloat(distance.toFixed(2));
+                geofenceStatus = distance <= obraAlocada.radius_km ? 'inside' : 'outside';
+            }
+            
+            return {
+                ...p,
+                allocatedObraId: obraAlocada ? obraAlocada.id : null,
+                allocatedObraName: obraAlocada ? obraAlocada.name : null,
+                allocatedObraDistance: distance,
+                allocatedObraRadius: obraAlocada ? obraAlocada.radius_km : null,
+                geofenceStatus
+            };
+        });
+        
+        res.json({
+            success: true,
+            employeeId,
+            employeeName: enrichedPunches.length > 0 ? enrichedPunches[0].employeeName : '',
+            obraAlocada,
+            punches: enrichedPunches
+        });
+        
+    } catch (error) {
+        console.error('Erro ao buscar trajeto do funcionário:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message
+        });
+    }
+});
+
 
 // Setup scheduled daily background checks using node-cron
 if (cron.validate(CRON_SCHEDULE)) {

@@ -311,6 +311,26 @@
                                             <button type="submit" class="btn btn-primary btn-block">Salvar Alocação</button>
                                         </form>
                                     </div>
+
+                                    <!-- Seção de Trajeto do Colaborador (Últimos 45 Dias) -->
+                                    <div id="trajectorySection" class="hidden trajectory-section">
+                                        <div class="trajectory-header">
+                                            <h3><i class="fa-solid fa-route"></i> Trajeto Recente (45 dias)</h3>
+                                            <button id="btnClearTrajectory" class="btn-small" style="background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.2); cursor: pointer;"><i class="fa-solid fa-xmark"></i> Fechar</button>
+                                        </div>
+                                        <div class="trajectory-summary" id="trajectorySummary">
+                                            <!-- Preenchido dinamicamente via JS -->
+                                        </div>
+                                        <div class="form-group" style="margin-bottom: 12px;">
+                                            <label for="trajectoryDateFilter">Filtrar por Período / Dia</label>
+                                            <select id="trajectoryDateFilter" class="form-select">
+                                                <!-- Populado dinamicamente -->
+                                            </select>
+                                        </div>
+                                        <div class="trajectory-list" id="trajectoryListContainer">
+                                            <!-- Pontos do trajeto listados dinamicamente -->
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="allocations-section">
                                     <h3>Colaboradores Alocados</h3>

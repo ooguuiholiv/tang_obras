@@ -10,6 +10,7 @@ yarn-error.log*
 # Banco de dados local SQLite e histórico
 data.db
 checks_history.json
+scratch/
 
 # Arquivos de sistema e IDEs
 .DS_Store

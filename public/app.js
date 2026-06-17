@@ -7,11 +7,13 @@ let activeTab = 'alerts'; // 'alerts', 'all', or 'obras'
 let searchQuery = '';
 let selectedPunchesDay = 'today'; // 'today' or 'yesterday'
 let registeredObras = [];
+let registeredContracts = [];
 let employeeAllocations = [];
 let uniqueEmployees = [];
 let selectedEmployeeName = '';
 let currentReportData = [];
 let filteredReportData = [];
+let activeSubTab = 'contracts'; // 'contracts', 'obras', or 'allocations'
 
 // DOM Elements
 const appContainer = document.getElementById('appContainer');
@@ -70,6 +72,20 @@ const allocEmployeeSelect = document.getElementById('allocEmployeeSelect');
 const allocEmployeeDropdownList = document.getElementById('allocEmployeeDropdownList');
 const allocObraSelect = document.getElementById('allocObraSelect');
 const allocationsListContainer = document.getElementById('allocationsListContainer');
+
+// Sub-abas de Obras & Contratos Elements
+const subTabContractsBtn = document.getElementById('subTabContractsBtn');
+const subTabObrasBtn = document.getElementById('subTabObrasBtn');
+const subTabAllocationsBtn = document.getElementById('subTabAllocationsBtn');
+const subTabContractsContainer = document.getElementById('subTabContractsContainer');
+const subTabObrasContainer = document.getElementById('subTabObrasContainer');
+const subTabAllocationsContainer = document.getElementById('subTabAllocationsContainer');
+
+const contractForm = document.getElementById('contractForm');
+const btnNewContract = document.getElementById('btnNewContract');
+const btnCancelContract = document.getElementById('btnCancelContract');
+const contractsListContainer = document.getElementById('contractsListContainer');
+const obraContractSelect = document.getElementById('obraContractSelect');
 
 // Elementos do Painel do Relatório
 const tabReportBtn = document.getElementById('tabReportBtn');
@@ -188,6 +204,7 @@ function initAuthenticatedApp() {
     }
     
     fetchStatus();
+    loadContracts();
     loadObras();
     loadAllocations();
     loadRealTimeData(); // Automatically fetch all punches and load data on access
@@ -424,7 +441,7 @@ function renderAlertDetails(alerts) {
             <div class="empty-alerts">
                 <div class="empty-icon"><i class="fa-solid fa-circle-check"></i></div>
                 <h3>Nenhum desvio detectado</h3>
-                <p>Todos os colaboradores bateram ponto próximos às localizações de ontem ou não há dados suficientes para comparação.</p>
+                <p>Todos os colaboradores bateram ponto próximos às suas obras alocadas ou não há dados suficientes para comparação.</p>
             </div>
         `;
         return;
@@ -433,8 +450,8 @@ function renderAlertDetails(alerts) {
     alertsContainer.innerHTML = '';
     
     alerts.forEach(alert => {
-        const timeToday = new Date(alert.todayPunch.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const timeYesterday = new Date(alert.yesterdayPunch.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const timeToday = new Date(alert.pontoBatido.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const dateTodayFormatted = new Date(alert.pontoBatido.timestamp).toLocaleDateString('pt-BR');
         
         const card = document.createElement('div');
         card.className = 'alert-card';
@@ -450,43 +467,74 @@ function renderAlertDetails(alerts) {
         const currentAlloc = employeeAllocations.find(a => a.employee_id === String(alert.employeeId));
         const currentObraId = currentAlloc ? currentAlloc.obra_id : null;
 
-        card.innerHTML = `
-            <div class="alert-card-header">
-                <span class="alert-employee">${alert.employeeName}</span>
-                <span class="alert-distance">${alert.distance} km</span>
-            </div>
-            <div class="alert-comparison">
-                <div class="alert-side">
-                    <span class="alert-side-title">Ontem</span>
-                    <span class="alert-obra">${alert.yesterdayPunch.workPlaceName || 'Sem Obra'}</span>
-                    <span class="alert-addr" title="${alert.yesterdayPunch.address}">${alert.yesterdayPunch.address}</span>
-                    <span class="alert-time"><i class="fa-regular fa-clock"></i> ${timeYesterday}</span>
-                </div>
-                <div class="alert-arrow">
-                    <i class="fa-solid fa-right-long"></i>
-                </div>
-                <div class="alert-side">
-                    <span class="alert-side-title">Hoje</span>
-                    <span class="alert-obra">${alert.todayPunch.workPlaceName || 'Sem Obra'}</span>
-                    <span class="alert-addr" title="${alert.todayPunch.address}">${alert.todayPunch.address}</span>
-                    <span class="alert-time"><i class="fa-regular fa-clock"></i> ${timeToday}</span>
-                </div>
-            </div>
-            <div class="alert-footer">
-                ${waBadge}
-                <div class="alert-actions" style="display: flex; gap: 8px; align-items: center;">
-                    <select class="form-select quick-alloc-select" style="padding: 6px 10px; font-size: 11px; border-radius: 6px; background: rgba(18, 24, 38, 0.85); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; outline: none; transition: var(--transition-smooth);" onchange="handleQuickAllocation('${alert.employeeId}', '${alert.employeeName.replace(/'/g, "\\'")}', this.value)">
-                        <option value="none">Alocar Obra...</option>
-                        ${registeredObras.map(o => {
-                            const isSelected = currentObraId === o.id ? 'selected' : '';
-                            return `<option value="${o.id}" ${isSelected}>${o.name}</option>`;
-                        }).join('')}
-                    </select>
-                    <a href="${alert.yesterdayPunch.mapUrl}" target="_blank" class="btn-small"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver Ontem</a>
-                    <a href="${alert.todayPunch.mapUrl}" target="_blank" class="btn-small"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver Hoje</a>
-                </div>
-            </div>
+        const quickSelectHtml = `
+            <select class="form-select quick-alloc-select" style="padding: 6px 10px; font-size: 11px; border-radius: 6px; background: rgba(18, 24, 38, 0.85); border: 1px solid var(--border-color); color: var(--text-primary); cursor: pointer; outline: none; transition: var(--transition-smooth);" onchange="handleQuickAllocation('${alert.employeeId}', '${alert.employeeName.replace(/'/g, "\\'")}', this.value)">
+                <option value="none">Alocar Obra...</option>
+                ${registeredObras.map(o => {
+                    const isSelected = currentObraId === o.id ? 'selected' : '';
+                    return `<option value="${o.id}" ${isSelected}>${o.name}</option>`;
+                }).join('')}
+            </select>
         `;
+
+        if (alert.type === 'no_allocation') {
+            card.className += ' alert-no-allocation';
+            card.innerHTML = `
+                <div class="alert-card-header" style="background: rgba(239, 68, 68, 0.05); border-color: rgba(239, 68, 68, 0.25);">
+                    <span class="alert-employee"><i class="fa-solid fa-user-slash" style="color: var(--danger);"></i> ${alert.employeeName}</span>
+                    <span class="alert-distance" style="background: rgba(239, 68, 68, 0.15); color: var(--danger); border-color: rgba(239, 68, 68, 0.2); text-transform: uppercase;">Sem Alocação</span>
+                </div>
+                <div class="alert-comparison" style="grid-template-columns: 1fr;">
+                    <div class="alert-side" style="text-align: center; padding: 12px; background: rgba(255, 255, 255, 0.015); border-radius: 8px; border: 1px dashed var(--border-color);">
+                        <span style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 8px;">
+                            <i class="fa-solid fa-triangle-exclamation" style="color: var(--warning);"></i> Este colaborador bateu ponto hoje, mas <strong>não possui obra alocada</strong> no sistema.
+                        </span>
+                        <div style="font-size: 11px; color: var(--text-muted);">
+                            Ponto batido em: <strong>${alert.pontoBatido.workPlaceName || 'Sem Obra no Ponto'}</strong> (${timeToday})
+                            <br>Endereço: ${alert.pontoBatido.address}
+                        </div>
+                    </div>
+                </div>
+                <div class="alert-footer">
+                    ${waBadge}
+                    <div class="alert-actions" style="display: flex; gap: 8px; align-items: center;">
+                        ${quickSelectHtml}
+                        <a href="${alert.pontoBatido.mapUrl}" target="_blank" class="btn-small"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver no Mapa</a>
+                    </div>
+                </div>
+            `;
+        } else {
+            card.innerHTML = `
+                <div class="alert-card-header">
+                    <span class="alert-employee"><i class="fa-solid fa-user-tie" style="color: var(--primary);"></i> ${alert.employeeName}</span>
+                    <span class="alert-distance">${alert.distance} km da Obra</span>
+                </div>
+                <div class="alert-comparison">
+                    <div class="alert-side">
+                        <span class="alert-side-title">Obra Alocada</span>
+                        <span class="alert-obra">${alert.obraAlocada.name}</span>
+                        <span class="alert-addr" title="${alert.obraAlocada.address || 'Sem Endereço'}">${alert.obraAlocada.address || 'Sem Endereço'}</span>
+                        <span class="alert-time"><i class="fa-solid fa-circle-dot" style="color: var(--warning);"></i> Raio: ${alert.obraAlocada.radius_km} km</span>
+                    </div>
+                    <div class="alert-arrow">
+                        <i class="fa-solid fa-right-long"></i>
+                    </div>
+                    <div class="alert-side">
+                        <span class="alert-side-title">Batida de Ponto (${dateTodayFormatted})</span>
+                        <span class="alert-obra">${alert.pontoBatido.workPlaceName || 'Sem Obra no Ponto'}</span>
+                        <span class="alert-addr" title="${alert.pontoBatido.address}">${alert.pontoBatido.address}</span>
+                        <span class="alert-time"><i class="fa-regular fa-clock"></i> ${timeToday} (${alert.pontoBatido.type})</span>
+                    </div>
+                </div>
+                <div class="alert-footer">
+                    ${waBadge}
+                    <div class="alert-actions" style="display: flex; gap: 8px; align-items: center;">
+                        ${quickSelectHtml}
+                        <a href="${alert.pontoBatido.mapUrl}" target="_blank" class="btn-small"><i class="fa-solid fa-arrow-up-right-from-square"></i> Ver Batida</a>
+                    </div>
+                </div>
+            `;
+        }
         
         alertsContainer.appendChild(card);
     });
@@ -631,67 +679,84 @@ function renderMapData(alerts) {
     const bounds = [];
     
     alerts.forEach(alert => {
-        const yLat = alert.yesterdayPunch.latitude;
-        const yLng = alert.yesterdayPunch.longitude;
-        const tLat = alert.todayPunch.latitude;
-        const tLng = alert.todayPunch.longitude;
+        const tLat = alert.pontoBatido.latitude;
+        const tLng = alert.pontoBatido.longitude;
         
-        bounds.push([yLat, yLng]);
         bounds.push([tLat, tLng]);
         
-        // Yesterday marker (Blue-grey circle)
-        const yesterdayMarker = L.circleMarker([yLat, yLng], {
-            radius: 8,
-            fillColor: '#9ca3af',
-            color: '#4b5563',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).bindPopup(`
-            <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
-                <strong style="color: #60a5fa;">Ontem - ${alert.employeeName}</strong><br>
-                <b>Obra:</b> ${alert.yesterdayPunch.workPlaceName || 'Sem Obra'}<br>
-                <b>Endereço:</b> ${alert.yesterdayPunch.address}<br>
-                <b>Horário:</b> ${new Date(alert.yesterdayPunch.timestamp).toLocaleTimeString('pt-BR')}
-            </div>
-        `);
+        // Marcador da Batida Real (Vermelho para desvio, Laranja para sem alocação)
+        const markerClass = alert.type === 'discrepancy' ? 'pulsing-map-marker' : '';
+        const fillColor = alert.type === 'discrepancy' ? '#ef4444' : '#f59e0b';
+        const strokeColor = alert.type === 'discrepancy' ? '#b91c1c' : '#d97706';
         
-        // Today marker (Red blinking warning circle)
-        const todayMarker = L.circleMarker([tLat, tLng], {
+        const popupContent = alert.type === 'discrepancy' ? `
+            <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
+                <strong style="color: #ef4444;">Desvio - ${alert.employeeName}</strong><br>
+                <b>Obra Alocada:</b> ${alert.obraAlocada.name}<br>
+                <b>Batida em:</b> ${alert.pontoBatido.workPlaceName || 'Sem Obra'}<br>
+                <b>Endereço Batida:</b> ${alert.pontoBatido.address}<br>
+                <b>Horário:</b> ${new Date(alert.pontoBatido.timestamp).toLocaleTimeString('pt-BR')}<br>
+                <b style="color: #fca5a5;">Distância: ${alert.distance} km</b>
+            </div>
+        ` : `
+            <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
+                <strong style="color: #fbbf24;">Sem Alocação - ${alert.employeeName}</strong><br>
+                <b>Batida em:</b> ${alert.pontoBatido.workPlaceName || 'Sem Obra'}<br>
+                <b>Endereço Batida:</b> ${alert.pontoBatido.address}<br>
+                <b>Horário:</b> ${new Date(alert.pontoBatido.timestamp).toLocaleTimeString('pt-BR')}
+            </div>
+        `;
+        
+        const punchMarker = L.circleMarker([tLat, tLng], {
             radius: 9,
-            fillColor: '#ef4444',
-            color: '#b91c1c',
+            fillColor: fillColor,
+            color: strokeColor,
             weight: 2,
             opacity: 1,
             fillOpacity: 0.9,
-            className: 'pulsing-map-marker'
-        }).bindPopup(`
-            <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
-                <strong style="color: #ef4444;">Hoje - ${alert.employeeName}</strong><br>
-                <b>Obra:</b> ${alert.todayPunch.workPlaceName || 'Sem Obra'}<br>
-                <b>Endereço:</b> ${alert.todayPunch.address}<br>
-                <b>Horário:</b> ${new Date(alert.todayPunch.timestamp).toLocaleTimeString('pt-BR')}<br>
-                <b style="color: #fca5a5;">Desvio: ${alert.distance} km</b>
-            </div>
-        `);
+            className: markerClass
+        }).bindPopup(popupContent);
         
-        // Dashed line between yesterday and today
-        const polyline = L.polyline([[yLat, yLng], [tLat, tLng]], {
-            color: '#f59e0b',
-            weight: 3,
-            dashArray: '5, 8',
-            opacity: 0.85
-        }).bindPopup(`
-            <div style="font-family: Inter, sans-serif; font-size: 12px; text-align: center; color: #ffffff;">
-                <strong>Distância do Desvio</strong><br>
-                <span style="font-size: 16px; font-weight: bold; color: #f59e0b;">${alert.distance} km</span><br>
-                Funcionário: ${alert.employeeName}
-            </div>
-        `);
+        markersLayer.addLayer(punchMarker);
         
-        markersLayer.addLayer(yesterdayMarker);
-        markersLayer.addLayer(todayMarker);
-        markersLayer.addLayer(polyline);
+        if (alert.type === 'discrepancy' && alert.obraAlocada) {
+            const oLat = alert.obraAlocada.latitude;
+            const oLng = alert.obraAlocada.longitude;
+            bounds.push([oLat, oLng]);
+            
+            // Marcador da Obra Alocada (Azul)
+            const obraMarker = L.circleMarker([oLat, oLng], {
+                radius: 7,
+                fillColor: '#3b82f6',
+                color: '#1d4ed8',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).bindPopup(`
+                <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
+                    <strong style="color: #60a5fa;">Obra Alocada - ${alert.obraAlocada.name}</strong><br>
+                    <b>Endereço:</b> ${alert.obraAlocada.address || 'Sem Endereço'}<br>
+                    <b>Cerca:</b> ${alert.obraAlocada.radius_km} km
+                </div>
+            `);
+            
+            // Linha tracejada conectando a Obra Alocada ao ponto real
+            const polyline = L.polyline([[oLat, oLng], [tLat, tLng]], {
+                color: '#fbbf24',
+                weight: 3,
+                dashArray: '5, 8',
+                opacity: 0.85
+            }).bindPopup(`
+                <div style="font-family: Inter, sans-serif; font-size: 12px; text-align: center; color: #ffffff;">
+                    <strong>Distância do Desvio</strong><br>
+                    <span style="font-size: 16px; font-weight: bold; color: #fbbf24;">${alert.distance} km</span><br>
+                    Funcionário: ${alert.employeeName}
+                </div>
+            `);
+            
+            markersLayer.addLayer(obraMarker);
+            markersLayer.addLayer(polyline);
+        }
     });
     
     if (bounds.length > 0) {
@@ -788,6 +853,25 @@ function renderEmptyDashboard() {
 // --- OBRAS & ALLOCATIONS PANEL LOGIC ---
 
 function setupObrasListeners() {
+    // Sub-tab switching events
+    subTabContractsBtn.addEventListener('click', () => switchSubTab('contracts'));
+    subTabObrasBtn.addEventListener('click', () => switchSubTab('obras'));
+    subTabAllocationsBtn.addEventListener('click', () => switchSubTab('allocations'));
+
+    // Contract Form Listeners
+    btnNewContract.addEventListener('click', () => {
+        contractForm.reset();
+        document.getElementById('contractId').value = '';
+        contractForm.classList.remove('hidden');
+    });
+
+    btnCancelContract.addEventListener('click', () => {
+        contractForm.reset();
+        contractForm.classList.add('hidden');
+    });
+
+    contractForm.addEventListener('submit', handleContractSubmit);
+
     btnNewObra.addEventListener('click', () => {
         obraForm.reset();
         document.getElementById('obraId').value = '';
@@ -909,6 +993,7 @@ function renderObrasList() {
         card.innerHTML = `
             <div class="obra-item-info">
                 <span class="obra-item-name">${o.name}</span>
+                <span class="obra-item-meta"><i class="fa-solid fa-file-contract"></i> Contrato: <strong>${o.contract_name || 'Sem Contrato'}</strong></span>
                 <span class="obra-item-meta"><i class="fa-solid fa-location-dot"></i> ${o.address || 'Sem Endereço'}</span>
                 <span class="obra-item-meta"><i class="fa-solid fa-circle-nodes"></i> Lat: ${o.latitude} | Lng: ${o.longitude} | Raio: ${o.radius_km} km</span>
             </div>
@@ -999,8 +1084,9 @@ async function handleObraSubmit(e) {
     const latitude = parseFloat(document.getElementById('obraLat').value);
     const longitude = parseFloat(document.getElementById('obraLng').value);
     const radius_km = parseFloat(document.getElementById('obraRadius').value);
+    const contract_id = document.getElementById('obraContractSelect').value;
     
-    const body = { name, address, latitude, longitude, radius_km };
+    const body = { name, address, latitude, longitude, radius_km, contract_id };
     const method = id ? 'PUT' : 'POST';
     const url = id ? `/api/obras/${id}` : '/api/obras';
     
@@ -1073,10 +1159,150 @@ window.editObra = (id) => {
     document.getElementById('obraLat').value = o.latitude;
     document.getElementById('obraLng').value = o.longitude;
     document.getElementById('obraRadius').value = o.radius_km || 1.0;
+    document.getElementById('obraContractSelect').value = o.contract_id || '';
     
     obraForm.classList.remove('hidden');
     obraForm.scrollIntoView({ behavior: 'smooth' });
 };
+
+// --- CONTRACTS PANEL LOGIC ---
+
+async function loadContracts() {
+    try {
+        const response = await authenticatedFetch('/api/contracts');
+        const data = await response.json();
+        if (data.success) {
+            registeredContracts = data.contracts;
+            renderContractsList();
+            populateContractSelectDropdown();
+        }
+    } catch (e) {
+        console.error('Error loading Contracts:', e);
+    }
+}
+
+function renderContractsList() {
+    if (registeredContracts.length === 0) {
+        contractsListContainer.innerHTML = `
+            <div style="text-align: center; color: var(--text-secondary); padding: 20px;">
+                Nenhum contrato cadastrado.
+            </div>
+        `;
+        return;
+    }
+    
+    contractsListContainer.innerHTML = '';
+    registeredContracts.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'obra-item-card';
+        card.innerHTML = `
+            <div class="obra-item-info">
+                <span class="obra-item-name">${c.name}</span>
+                <span class="contract-meta"><i class="fa-solid fa-hashtag"></i> Num: ${c.number_contract} | <i class="fa-solid fa-list-ol"></i> Série: ${c.serie || 'N/A'}</span>
+                ${c.description ? `<div class="contract-desc">${c.description}</div>` : ''}
+            </div>
+            <div class="obra-item-actions">
+                <button class="btn-icon-only edit" onclick="editContract('${c.id}')" title="Editar Contrato"><i class="fa-solid fa-pencil"></i></button>
+                <button class="btn-icon-only delete" onclick="deleteContract('${c.id}')" title="Remover Contrato"><i class="fa-solid fa-trash"></i></button>
+            </div>
+        `;
+        contractsListContainer.appendChild(card);
+    });
+}
+
+function populateContractSelectDropdown() {
+    obraContractSelect.innerHTML = `
+        <option value="" disabled selected>Selecione um contrato...</option>
+    `;
+    registeredContracts.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = `${c.name} (${c.number_contract})`;
+        obraContractSelect.appendChild(opt);
+    });
+}
+
+async function handleContractSubmit(e) {
+    e.preventDefault();
+    const id = document.getElementById('contractId').value;
+    const name = document.getElementById('contractName').value.trim();
+    const number_contract = document.getElementById('contractNumber').value.trim();
+    const serie = document.getElementById('contractSerie').value.trim();
+    const description = document.getElementById('contractDescription').value.trim();
+
+    const body = { name, number_contract, serie, description };
+    const method = id ? 'PUT' : 'POST';
+    const url = id ? `/api/contracts/${id}` : '/api/contracts';
+
+    try {
+        const response = await authenticatedFetch(url, {
+            method,
+            body: JSON.stringify(body)
+        });
+        const result = await response.json();
+        if (result.success) {
+            contractForm.reset();
+            contractForm.classList.add('hidden');
+            await loadContracts();
+        } else {
+            alert(result.message || 'Erro ao salvar contrato.');
+        }
+    } catch (error) {
+        console.error('Error saving Contract:', error);
+    }
+}
+
+window.editContract = (id) => {
+    const c = registeredContracts.find(x => x.id === id);
+    if (!c) return;
+    
+    document.getElementById('contractId').value = c.id;
+    document.getElementById('contractName').value = c.name;
+    document.getElementById('contractNumber').value = c.number_contract;
+    document.getElementById('contractSerie').value = c.serie || '';
+    document.getElementById('contractDescription').value = c.description || '';
+    
+    contractForm.classList.remove('hidden');
+    contractForm.scrollIntoView({ behavior: 'smooth' });
+};
+
+window.deleteContract = async (id) => {
+    if (!confirm('Deseja excluir este contrato? (Isto falhará se houver obras vinculadas)')) return;
+    try {
+        const response = await authenticatedFetch(`/api/contracts/${id}`, { method: 'DELETE' });
+        const result = await response.json();
+        if (result.success) {
+            await loadContracts();
+        } else {
+            alert(result.message || 'Erro ao excluir contrato.');
+        }
+    } catch (e) {
+        console.error(e);
+    }
+};
+
+function switchSubTab(subTab) {
+    activeSubTab = subTab;
+    
+    subTabContractsBtn.classList.remove('active');
+    subTabObrasBtn.classList.remove('active');
+    subTabAllocationsBtn.classList.remove('active');
+    
+    subTabContractsContainer.classList.add('hidden');
+    subTabObrasContainer.classList.add('hidden');
+    subTabAllocationsContainer.classList.add('hidden');
+    
+    if (subTab === 'contracts') {
+        subTabContractsBtn.classList.add('active');
+        subTabContractsContainer.classList.remove('hidden');
+    } else if (subTab === 'obras') {
+        subTabObrasBtn.classList.add('active');
+        subTabObrasContainer.classList.remove('hidden');
+    } else if (subTab === 'allocations') {
+        subTabAllocationsBtn.classList.add('active');
+        subTabAllocationsContainer.classList.remove('hidden');
+    }
+}
 
 window.deleteObra = async (id) => {
     if (!confirm('Deseja excluir esta obra permanentemente?')) return;

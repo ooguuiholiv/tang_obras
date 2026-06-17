@@ -162,79 +162,163 @@
 
                     <!-- Obras & Allocations Section -->
                     <div class="obras-container hidden" id="obrasContainer">
-                        <div class="obras-flex-layout">
-                            
-                            <!-- Left: Obras Register Form & List -->
-                            <div class="obras-section">
-                                <div class="section-title-header">
-                                    <h3><i class="fa-solid fa-helmet-safety"></i> Cadastro de Obras</h3>
-                                    <button class="btn btn-small" id="btnNewObra"><i class="fa-solid fa-plus"></i> Nova Obra</button>
-                                </div>
-                                
-                                <form id="obraForm" class="obra-form hidden">
-                                    <input type="hidden" id="obraId">
-                                    <div class="form-group">
-                                        <label for="obraName">Nome da Obra</label>
-                                        <input type="text" id="obraName" placeholder="Ex: Obra Central" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label for="obraAddress">Endereço</label>
-                                        <input type="text" id="obraAddress" placeholder="Rua, Número, Cidade">
-                                    </div>
-                                    <div class="form-row">
-                                        <div class="form-group">
-                                            <label for="obraLat">Latitude</label>
-                                            <input type="number" id="obraLat" step="any" placeholder="-19.9123" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="obraLng">Longitude</label>
-                                            <input type="number" id="obraLng" step="any" placeholder="-43.9345" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label for="obraRadius">Raio de Cerca (km)</label>
-                                            <input type="number" id="obraRadius" step="any" value="1.0" min="0.1" required>
-                                        </div>
-                                    </div>
-                                    <div class="form-actions">
-                                        <button type="button" class="btn btn-outline btn-small" id="btnCancelObra">Cancelar</button>
-                                        <button type="submit" class="btn btn-primary btn-small" id="btnSaveObra">Salvar</button>
-                                    </div>
-                                </form>
+                        <div class="sub-tabs-header">
+                            <button class="sub-tab-btn active" id="subTabContractsBtn">
+                                <i class="fa-solid fa-file-contract"></i> Contratos
+                            </button>
+                            <button class="sub-tab-btn" id="subTabObrasBtn">
+                                <i class="fa-solid fa-helmet-safety"></i> Obras
+                            </button>
+                            <button class="sub-tab-btn" id="subTabAllocationsBtn">
+                                <i class="fa-solid fa-people-arrows"></i> Alocar Colaboradores
+                            </button>
+                        </div>
 
-                                <div class="obras-list" id="obrasListContainer">
-                                    <!-- Populated dynamically -->
+                        <!-- 1. Sub-aba: Contratos -->
+                        <div class="sub-tab-content" id="subTabContractsContainer">
+                            <div class="obras-flex-layout">
+                                <div class="obras-section">
+                                    <div class="section-title-header">
+                                        <h3><i class="fa-solid fa-file-signature"></i> Cadastro de Contratos</h3>
+                                        <button class="btn btn-small" id="btnNewContract"><i class="fa-solid fa-plus"></i> Novo Contrato</button>
+                                    </div>
+                                    
+                                    <form id="contractForm" class="obra-form hidden">
+                                        <input type="hidden" id="contractId">
+                                        <div class="form-group">
+                                            <label for="contractName">Nome do Contrato</label>
+                                            <input type="text" id="contractName" placeholder="Ex: Contrato de Manutenção Central" required>
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="contractNumber">Número do Contrato</label>
+                                                <input type="text" id="contractNumber" placeholder="Ex: 2026/001" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="contractSerie">Série</label>
+                                                <input type="text" id="contractSerie" placeholder="Ex: A-01">
+                                            </div>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="contractDescription">Descrição</label>
+                                            <textarea id="contractDescription" placeholder="Detalhes do escopo do contrato..." rows="3" style="width: 100%; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border-color); color: white; font-family: var(--font-body); font-size: 13px; resize: vertical;"></textarea>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button type="button" class="btn btn-outline btn-small" id="btnCancelContract">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary btn-small" id="btnSaveContract">Salvar</button>
+                                        </div>
+                                    </form>
+
+                                    <div class="obras-list" id="contractsListContainer">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                                <div class="allocations-section">
+                                    <h3>Dicas de Contratos</h3>
+                                    <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                                        <p style="margin-bottom: 10px;"><i class="fa-solid fa-circle-info" style="color: var(--primary);"></i> Contratos são usados para organizar o rateio de custos.</p>
+                                        <p style="margin-bottom: 10px;">• Cadastre primeiro o Contrato (informando Nome, Número e Série).</p>
+                                        <p style="margin-bottom: 10px;">• Em seguida, na sub-aba **Obras**, crie as Obras associando-as ao respectivo Contrato.</p>
+                                        <p>• Um contrato pode ter várias obras vinculadas, mas cada obra pertencerá a apenas um contrato.</p>
+                                    </div>
                                 </div>
                             </div>
-                            
-                            <!-- Right: Employee Allocations -->
-                            <div class="allocations-section">
-                                <h3><i class="fa-solid fa-people-arrows"></i> Alocação de Colaboradores</h3>
-                                <div class="allocation-form-wrapper">
-                                    <form id="allocationForm" class="allocation-form">
-                                         <div class="form-group custom-select-container">
-                                             <label for="allocEmployeeSearch">Colaborador</label>
-                                             <div class="custom-select-wrapper">
-                                                 <input type="text" id="allocEmployeeSearch" placeholder="Buscar colaborador pelo nome..." autocomplete="off" required>
-                                                 <input type="hidden" id="allocEmployeeSelect" required>
-                                                 <div id="allocEmployeeDropdownList" class="custom-select-dropdown hidden">
-                                                     <!-- Filtered employee list -->
-                                                 </div>
-                                             </div>
-                                         </div>
+                        </div>
+
+                        <!-- 2. Sub-aba: Obras -->
+                        <div class="sub-tab-content hidden" id="subTabObrasContainer">
+                            <div class="obras-flex-layout">
+                                <div class="obras-section">
+                                    <div class="section-title-header">
+                                        <h3><i class="fa-solid fa-helmet-safety"></i> Cadastro de Obras</h3>
+                                        <button class="btn btn-small" id="btnNewObra"><i class="fa-solid fa-plus"></i> Nova Obra</button>
+                                    </div>
+                                    
+                                    <form id="obraForm" class="obra-form hidden">
+                                        <input type="hidden" id="obraId">
                                         <div class="form-group">
-                                            <label for="allocObraSelect">Obra Alocada</label>
-                                            <select id="allocObraSelect" class="form-select" required>
-                                                <option value="" disabled selected>Selecione uma obra...</option>
+                                            <label for="obraName">Nome da Obra</label>
+                                            <input type="text" id="obraName" placeholder="Ex: Obra Central" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="obraContractSelect">Contrato Vinculado</label>
+                                            <select id="obraContractSelect" class="form-select" required>
+                                                <option value="" disabled selected>Selecione um contrato...</option>
                                             </select>
                                         </div>
-                                        <button type="submit" class="btn btn-primary btn-block">Salvar Alocação</button>
+                                        <div class="form-group">
+                                            <label for="obraAddress">Endereço</label>
+                                            <input type="text" id="obraAddress" placeholder="Rua, Número, Cidade">
+                                        </div>
+                                        <div class="form-row">
+                                            <div class="form-group">
+                                                <label for="obraLat">Latitude</label>
+                                                <input type="number" id="obraLat" step="any" placeholder="-19.9123" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="obraLng">Longitude</label>
+                                                <input type="number" id="obraLng" step="any" placeholder="-43.9345" required>
+                                            </div>
+                                            <div class="form-group">
+                                                <label for="obraRadius">Raio de Cerca (km)</label>
+                                                <input type="number" id="obraRadius" step="any" value="1.0" min="0.1" required>
+                                            </div>
+                                        </div>
+                                        <div class="form-actions">
+                                            <button type="button" class="btn btn-outline btn-small" id="btnCancelObra">Cancelar</button>
+                                            <button type="submit" class="btn btn-primary btn-small" id="btnSaveObra">Salvar</button>
+                                        </div>
                                     </form>
+
+                                    <div class="obras-list" id="obrasListContainer">
+                                        <!-- Populated dynamically -->
+                                    </div>
                                 </div>
-                                <div class="allocations-list" id="allocationsListContainer">
-                                    <!-- Populated dynamically -->
+                                <div class="allocations-section">
+                                    <h3>Como Vincular Obras</h3>
+                                    <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; font-size: 13px; color: var(--text-secondary); line-height: 1.6;">
+                                        <p style="margin-bottom: 10px;"><i class="fa-solid fa-map-location-dot" style="color: var(--warning);"></i> As obras possuem geofence.</p>
+                                        <p style="margin-bottom: 10px;">• Preencha a latitude e longitude exata da obra para que a cerca de proteção funcione.</p>
+                                        <p>• O raio da cerca padrão é 1.0 km, mas pode ser configurado conforme a necessidade.</p>
+                                    </div>
                                 </div>
                             </div>
+                        </div>
 
+                        <!-- 3. Sub-aba: Alocações -->
+                        <div class="sub-tab-content hidden" id="subTabAllocationsContainer">
+                            <div class="obras-flex-layout">
+                                <div class="obras-section">
+                                    <h3><i class="fa-solid fa-people-arrows"></i> Alocação de Colaboradores</h3>
+                                    <div class="allocation-form-wrapper" style="margin-bottom: 20px;">
+                                        <form id="allocationForm" class="allocation-form">
+                                             <div class="form-group custom-select-container">
+                                                 <label for="allocEmployeeSearch">Colaborador</label>
+                                                 <div class="custom-select-wrapper">
+                                                     <input type="text" id="allocEmployeeSearch" placeholder="Buscar colaborador pelo nome..." autocomplete="off" required>
+                                                     <input type="hidden" id="allocEmployeeSelect" required>
+                                                     <div id="allocEmployeeDropdownList" class="custom-select-dropdown hidden">
+                                                         <!-- Filtered employee list -->
+                                                     </div>
+                                                 </div>
+                                             </div>
+                                            <div class="form-group">
+                                                <label for="allocObraSelect">Obra Alocada</label>
+                                                <select id="allocObraSelect" class="form-select" required>
+                                                    <option value="" disabled selected>Selecione uma obra...</option>
+                                                </select>
+                                            </div>
+                                            <button type="submit" class="btn btn-primary btn-block">Salvar Alocação</button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="allocations-section">
+                                    <h3>Colaboradores Alocados</h3>
+                                    <div class="allocations-list" id="allocationsListContainer">
+                                        <!-- Populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 

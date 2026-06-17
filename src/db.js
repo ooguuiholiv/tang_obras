@@ -16,6 +16,17 @@ db.serialize(() => {
     // Enable foreign keys
     db.run('PRAGMA foreign_keys = ON');
 
+    // Create Contracts table
+    db.run(`
+        CREATE TABLE IF NOT EXISTS contracts (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            description TEXT,
+            number_contract TEXT,
+            serie TEXT
+        )
+    `);
+
     // Create Obras table
     db.run(`
         CREATE TABLE IF NOT EXISTS obras (
@@ -24,9 +35,25 @@ db.serialize(() => {
             latitude REAL NOT NULL,
             longitude REAL NOT NULL,
             address TEXT,
-            radius_km REAL DEFAULT 1.0
+            radius_km REAL DEFAULT 1.0,
+            contract_id TEXT,
+            FOREIGN KEY(contract_id) REFERENCES contracts(id) ON DELETE SET NULL
         )
     `);
+
+    // Migração: Adicionar coluna contract_id caso a tabela de obras já existisse sem ela
+    db.run(`
+        ALTER TABLE obras ADD COLUMN contract_id TEXT REFERENCES contracts(id) ON DELETE SET NULL
+    `, (err) => {
+        if (err) {
+            // Ignora se o erro for de coluna duplicada
+            if (!err.message.includes('duplicate column name') && !err.message.includes('already exists')) {
+                console.log('Nota da migração do SQLite (adicionar contract_id):', err.message);
+            }
+        } else {
+            console.log('Coluna contract_id adicionada com sucesso à tabela obras.');
+        }
+    });
 
     // Create Allocations table
     db.run(`
@@ -34,7 +61,7 @@ db.serialize(() => {
             employee_id TEXT PRIMARY KEY,
             employee_name TEXT NOT NULL,
             obra_id INTEGER,
-            FOREIGN KEY(obra_id) REFERENCES obras(id) ON DELETE CASCADE
+            FOREIGN KEY(obra_id) REFERENCES obras(id)
         )
     `);
 });
@@ -68,27 +95,71 @@ const dbGet = (query, params = []) => {
 };
 
 // Database APIs
+const getContracts = () => {
+    return dbAll('SELECT * FROM contracts ORDER BY name ASC');
+};
+
+const getContractById = (id) => {
+    return dbGet('SELECT * FROM contracts WHERE id = ?', [id]);
+};
+
+const createContract = ({ name, description, number_contract, serie }) => {
+    const { randomUUID } = require('crypto');
+    const id = randomUUID();
+    return dbRun(
+        'INSERT INTO contracts (id, name, description, number_contract, serie) VALUES (?, ?, ?, ?, ?)',
+        [id, name, description || '', number_contract || '', serie || '']
+    ).then(res => {
+        res.id = id;
+        return res;
+    });
+};
+
+const updateContract = (id, { name, description, number_contract, serie }) => {
+    return dbRun(
+        'UPDATE contracts SET name = ?, description = ?, number_contract = ?, serie = ? WHERE id = ?',
+        [name, description || '', number_contract || '', serie || '', id]
+    );
+};
+
+const deleteContract = (id) => {
+    return dbRun('DELETE FROM contracts WHERE id = ?', [id]);
+};
+
+const getObrasByContractId = (contractId) => {
+    return dbAll('SELECT * FROM obras WHERE contract_id = ?', [contractId]);
+};
+
+const getAllocationsByObraId = (obraId) => {
+    return dbAll('SELECT * FROM allocations WHERE obra_id = ?', [obraId]);
+};
+
 const getObras = () => {
-    return dbAll('SELECT * FROM obras ORDER BY name ASC');
+    return dbAll(`
+        SELECT o.*, c.name as contract_name 
+        FROM obras o 
+        LEFT JOIN contracts c ON o.contract_id = c.id 
+        ORDER BY o.name ASC
+    `);
 };
 
 const getObraById = (id) => {
     return dbGet('SELECT * FROM obras WHERE id = ?', [id]);
 };
 
-const createObra = ({ name, latitude, longitude, address, radius_km }) => {
+const createObra = ({ name, latitude, longitude, address, radius_km, contract_id }) => {
     const r = radius_km !== undefined ? parseFloat(radius_km) : 1.0;
     return dbRun(
-        'INSERT INTO obras (name, latitude, longitude, address, radius_km) VALUES (?, ?, ?, ?, ?)',
-        [name, parseFloat(latitude), parseFloat(longitude), address || '', r]
+        'INSERT INTO obras (name, latitude, longitude, address, radius_km, contract_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [name, parseFloat(latitude), parseFloat(longitude), address || '', r, contract_id || null]
     );
 };
 
-const updateObra = (id, { name, latitude, longitude, address, radius_km }) => {
+const updateObra = (id, { name, latitude, longitude, address, radius_km, contract_id }) => {
     const r = radius_km !== undefined ? parseFloat(radius_km) : 1.0;
     return dbRun(
-        'UPDATE obras SET name = ?, latitude = ?, longitude = ?, address = ?, radius_km = ? WHERE id = ?',
-        [name, parseFloat(latitude), parseFloat(longitude), address || '', r, id]
+        'UPDATE obras SET name = ?, latitude = ?, longitude = ?, address = ?, radius_km = ?, contract_id = ? WHERE id = ?',
+        [name, parseFloat(latitude), parseFloat(longitude), address || '', r, contract_id || null, id]
     );
 };
 
@@ -126,6 +197,13 @@ const deleteAllocation = (employee_id) => {
 };
 
 module.exports = {
+    getContracts,
+    getContractById,
+    createContract,
+    updateContract,
+    deleteContract,
+    getObrasByContractId,
+    getAllocationsByObraId,
     getObras,
     getObraById,
     createObra,

@@ -131,74 +131,109 @@ async function runVerification(sendAlerts = true) {
     const alerts = [];
     const checkedEmployees = new Set();
 
-    // Check distance discrepancies for employees who clocked in today
+    // Check distance discrepancies or missing allocations for employees who clocked in today
     for (const employeeId in employeesToday) {
         checkedEmployees.add(employeeId);
         const todayEvents = employeesToday[employeeId];
-        const yesterdayEvents = employeesYesterday[employeeId];
+        const employeeName = todayEvents[0].employeeName;
 
-        // Skip if there are no punches from yesterday to compare against
-        if (!yesterdayEvents || yesterdayEvents.length === 0) {
+        const allocation = allocationsMap[employeeId];
+
+        if (!allocation || !allocation.obra_id) {
+            // Colaborador sem alocação
+            alerts.push({
+                employeeId,
+                employeeName,
+                type: 'no_allocation',
+                distance: 0,
+                obraAlocada: null,
+                pontoBatido: {
+                    punchId: todayEvents[0].punchId,
+                    type: todayEvents[0].type,
+                    timestamp: todayEvents[0].timestamp,
+                    date: todayEvents[0].date,
+                    latitude: todayEvents[0].latitude,
+                    longitude: todayEvents[0].longitude,
+                    address: todayEvents[0].address,
+                    workPlaceName: todayEvents[0].workPlaceName,
+                    mapUrl: `https://www.google.com/maps?q=${todayEvents[0].latitude},${todayEvents[0].longitude}`
+                },
+                whatsappSent: false,
+                whatsappError: null
+            });
             continue;
         }
 
-        const employeeName = todayEvents[0].employeeName;
+        const obra = obrasMap[allocation.obra_id];
+        if (!obra) {
+            // Caso a obra vinculada na alocação não exista mais
+            alerts.push({
+                employeeId,
+                employeeName,
+                type: 'no_allocation',
+                distance: 0,
+                obraAlocada: null,
+                pontoBatido: {
+                    punchId: todayEvents[0].punchId,
+                    type: todayEvents[0].type,
+                    timestamp: todayEvents[0].timestamp,
+                    date: todayEvents[0].date,
+                    latitude: todayEvents[0].latitude,
+                    longitude: todayEvents[0].longitude,
+                    address: todayEvents[0].address,
+                    workPlaceName: todayEvents[0].workPlaceName,
+                    mapUrl: `https://www.google.com/maps?q=${todayEvents[0].latitude},${todayEvents[0].longitude}`
+                },
+                whatsappSent: false,
+                whatsappError: null
+            });
+            continue;
+        }
 
+        // Se está alocado e a obra existe, verificar a distância de cada batida de hoje
         for (const tEvent of todayEvents) {
-            let minDistance = Infinity;
-            let closestYesterdayEvent = null;
+            const dist = getDistance(
+                tEvent.latitude,
+                tEvent.longitude,
+                obra.latitude,
+                obra.longitude
+            );
 
-            // Calculate distance to all yesterday's locations and find the closest one
-            for (const yEvent of yesterdayEvents) {
-                const dist = getDistance(
-                    tEvent.latitude,
-                    tEvent.longitude,
-                    yEvent.latitude,
-                    yEvent.longitude
-                );
+            // Alerta se a distância for maior que a configurada (ex: 50km)
+            if (dist > DISTANCE_LIMIT_KM) {
+                const punchMapUrl = `https://www.google.com/maps?q=${tEvent.latitude},${tEvent.longitude}`;
 
-                if (dist < minDistance) {
-                    minDistance = dist;
-                    closestYesterdayEvent = yEvent;
-                }
-            }
-
-            // If the closest location from yesterday is further than the limit, trigger alert
-            if (minDistance > DISTANCE_LIMIT_KM) {
-                // Formulate maps URL
-                const todayMapUrl = `https://www.google.com/maps?q=${tEvent.latitude},${tEvent.longitude}`;
-                const yesterdayMapUrl = `https://www.google.com/maps?q=${closestYesterdayEvent.latitude},${closestYesterdayEvent.longitude}`;
-
-                // Check if this alert is already added (e.g. avoid duplicate alerts for the same employee clocking in twice in the same distant place)
+                // Evitar alertas duplicados de desvio para o mesmo colaborador a menos de 1km da mesma batida
                 const isDuplicate = alerts.some(a => 
                     a.employeeId === employeeId && 
-                    getDistance(a.todayPunch.latitude, a.todayPunch.longitude, tEvent.latitude, tEvent.longitude) < 1.0
+                    a.type === 'discrepancy' &&
+                    getDistance(a.pontoBatido.latitude, a.pontoBatido.longitude, tEvent.latitude, tEvent.longitude) < 1.0
                 );
 
                 if (!isDuplicate) {
                     alerts.push({
                         employeeId,
                         employeeName,
-                        distance: parseFloat(minDistance.toFixed(2)),
-                        todayPunch: {
+                        type: 'discrepancy',
+                        distance: parseFloat(dist.toFixed(2)),
+                        obraAlocada: {
+                            id: obra.id,
+                            name: obra.name,
+                            address: obra.address,
+                            latitude: obra.latitude,
+                            longitude: obra.longitude,
+                            radius_km: obra.radius_km
+                        },
+                        pontoBatido: {
                             punchId: tEvent.punchId,
                             type: tEvent.type,
                             timestamp: tEvent.timestamp,
+                            date: tEvent.date,
                             latitude: tEvent.latitude,
                             longitude: tEvent.longitude,
                             address: tEvent.address,
                             workPlaceName: tEvent.workPlaceName,
-                            mapUrl: todayMapUrl
-                        },
-                        yesterdayPunch: {
-                            punchId: closestYesterdayEvent.punchId,
-                            type: closestYesterdayEvent.type,
-                            timestamp: closestYesterdayEvent.timestamp,
-                            latitude: closestYesterdayEvent.latitude,
-                            longitude: closestYesterdayEvent.longitude,
-                            address: closestYesterdayEvent.address,
-                            workPlaceName: closestYesterdayEvent.workPlaceName,
-                            mapUrl: yesterdayMapUrl
+                            mapUrl: punchMapUrl
                         },
                         whatsappSent: false,
                         whatsappError: null
@@ -208,46 +243,62 @@ async function runVerification(sendAlerts = true) {
         }
     }
 
-    console.log(`Verification complete. Found ${alerts.length} location discrepancies.`);
+    console.log(`Verification complete. Found ${alerts.length} location discrepancies or allocation issues.`);
 
     // Send WhatsApp notifications for each alert (only if sendAlerts is true and enabled via env)
     const enableWhatsApp = process.env.SEND_WHATSAPP_ALERTS === 'true';
     if (sendAlerts && enableWhatsApp) {
         for (const alert of alerts) {
-        const timeToday = new Date(alert.todayPunch.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const dateTodayFormatted = new Date(alert.todayPunch.timestamp).toLocaleDateString('pt-BR');
-        const timeYesterday = new Date(alert.yesterdayPunch.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const dateYesterdayFormatted = new Date(alert.yesterdayPunch.timestamp).toLocaleDateString('pt-BR');
+            let messageText = '';
+            
+            if (alert.type === 'discrepancy') {
+                const timeToday = new Date(alert.pontoBatido.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const dateTodayFormatted = new Date(alert.pontoBatido.timestamp).toLocaleDateString('pt-BR');
+                const obraHoje = alert.pontoBatido.workPlaceName || 'Obra não cadastrada no Ponto';
 
-        const obraHoje = alert.todayPunch.workPlaceName || 'Obra não cadastrada no Ponto';
-        const obraOntem = alert.yesterdayPunch.workPlaceName || 'Obra não cadastrada no Ponto';
-
-        // Format Portuguese notification message
-        const messageText = 
-`⚠️ *ALERTA: Mudança de Obra/Localização*
+                messageText = 
+`⚠️ *ALERTA: Desvio de Obra Alocada*
 👤 *Funcionário:* ${alert.employeeName}
-📍 *Distância:* ${alert.distance} km
+📍 *Distância:* ${alert.distance} km da obra alocada
 
-*REGISTRO DE HOJE (${dateTodayFormatted}):*
-• Horário: ${timeToday} (${alert.todayPunch.type})
-• Obra: ${obraHoje}
-• Endereço: ${alert.todayPunch.address}
-• GPS: ${alert.todayPunch.mapUrl}
+*DADOS DA OBRA ALOCADA:*
+• Obra: ${alert.obraAlocada.name}
+• Endereço: ${alert.obraAlocada.address || 'Sem Endereço'}
 
-*REGISTRO DE ONTEM (${dateYesterdayFormatted}):*
-• Horário: ${timeYesterday} (${alert.yesterdayPunch.type})
-• Obra: ${obraOntem}
-• Endereço: ${alert.yesterdayPunch.address}
-• GPS: ${alert.yesterdayPunch.mapUrl}
+*DADOS DA BATIDA REAL DE HOJE (${dateTodayFormatted}):*
+• Horário: ${timeToday} (${alert.pontoBatido.type})
+• Ponto batido em: ${obraHoje}
+• Endereço: ${alert.pontoBatido.address}
+• GPS: ${alert.pontoBatido.mapUrl}
 
 _Verifique se a alocação de centro de custo do funcionário está correta._`;
+            } else if (alert.type === 'no_allocation') {
+                const timeToday = new Date(alert.pontoBatido.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                const dateTodayFormatted = new Date(alert.pontoBatido.timestamp).toLocaleDateString('pt-BR');
+                const obraHoje = alert.pontoBatido.workPlaceName || 'Obra não cadastrada no Ponto';
 
-        const waResult = await sendWhatsAppAlert(messageText);
-        if (waResult.success) {
-            alert.whatsappSent = true;
-        } else {
-            alert.whatsappError = waResult.error || 'Unknown error';
-        }
+                messageText = 
+`⚠️ *ALERTA: Colaborador Sem Alocação*
+👤 *Funcionário:* ${alert.employeeName}
+📍 *Status:* Bateu ponto mas não está alocado a nenhuma obra.
+
+*DADOS DA BATIDA DE HOJE (${dateTodayFormatted}):*
+• Horário: ${timeToday} (${alert.pontoBatido.type})
+• Ponto batido em: ${obraHoje}
+• Endereço: ${alert.pontoBatido.address}
+• GPS: ${alert.pontoBatido.mapUrl}
+
+_Por favor, acesse o painel TangObras e aloque este colaborador._`;
+            }
+
+            if (messageText) {
+                const waResult = await sendWhatsAppAlert(messageText);
+                if (waResult.success) {
+                    alert.whatsappSent = true;
+                } else {
+                    alert.whatsappError = waResult.error || 'Unknown error';
+                }
+            }
         }
     }
 

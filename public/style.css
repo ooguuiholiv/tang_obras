@@ -1611,3 +1611,73 @@ body {
     font-size: 11px;
     color: var(--text-secondary);
 }
+
+/* Sub-abas de Obras & Contratos */
+.sub-tabs-header {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 20px;
+    padding-bottom: 2px;
+}
+
+.sub-tab-btn {
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 14px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: var(--transition-smooth);
+    border-radius: 6px 6px 0 0;
+}
+
+.sub-tab-btn:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.sub-tab-btn.active {
+    color: var(--warning);
+}
+
+.sub-tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: var(--warning);
+    border-radius: 1px;
+    box-shadow: 0 0 8px var(--warning);
+}
+
+.sub-tab-content {
+    animation: fadeIn 0.25s ease-out;
+}
+
+/* Estilos adicionais para Contratos */
+.contract-meta {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 4px;
+}
+
+.contract-desc {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 6px;
+    line-height: 1.4;
+    background: rgba(255, 255, 255, 0.01);
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px dashed rgba(255, 255, 255, 0.03);
+}
+
+.obra-item-meta strong {
+    color: var(--warning);
+}

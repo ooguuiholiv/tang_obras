@@ -223,11 +223,11 @@ app.get('/api/obras', async (req, res) => {
 
 app.post('/api/obras', async (req, res) => {
     try {
-        const { name, latitude, longitude, address, radius_km } = req.body;
+        const { name, latitude, longitude, address, radius_km, contract_id } = req.body;
         if (!name || latitude === undefined || longitude === undefined) {
             return res.status(400).json({ success: false, message: 'Nome, latitude e longitude são obrigatórios.' });
         }
-        const result = await db.createObra({ name, latitude, longitude, address, radius_km });
+        const result = await db.createObra({ name, latitude, longitude, address, radius_km, contract_id });
         res.json({ success: true, id: result.lastID, message: 'Obra criada com sucesso.' });
     } catch (error) {
         console.error('Error creating Obra:', error);
@@ -237,11 +237,11 @@ app.post('/api/obras', async (req, res) => {
 
 app.put('/api/obras/:id', async (req, res) => {
     try {
-        const { name, latitude, longitude, address, radius_km } = req.body;
+        const { name, latitude, longitude, address, radius_km, contract_id } = req.body;
         if (!name || latitude === undefined || longitude === undefined) {
             return res.status(400).json({ success: false, message: 'Nome, latitude e longitude são obrigatórios.' });
         }
-        await db.updateObra(req.params.id, { name, latitude, longitude, address, radius_km });
+        await db.updateObra(req.params.id, { name, latitude, longitude, address, radius_km, contract_id });
         res.json({ success: true, message: 'Obra atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating Obra:', error);
@@ -251,10 +251,77 @@ app.put('/api/obras/:id', async (req, res) => {
 
 app.delete('/api/obras/:id', async (req, res) => {
     try {
+        // Validação de Integridade: Impedir exclusão se houver colaboradores alocados
+        const linkedAllocations = await db.getAllocationsByObraId(req.params.id);
+        if (linkedAllocations && linkedAllocations.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Não é permitido excluir uma obra com colaboradores alocados. Desaloque-os primeiro.' 
+            });
+        }
         await db.deleteObra(req.params.id);
         res.json({ success: true, message: 'Obra removida com sucesso.' });
     } catch (error) {
         console.error('Error deleting Obra:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+/**
+ * Contracts CRUD Routes
+ */
+app.get('/api/contracts', async (req, res) => {
+    try {
+        const contracts = await db.getContracts();
+        res.json({ success: true, contracts });
+    } catch (error) {
+        console.error('Error listing Contracts:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.post('/api/contracts', async (req, res) => {
+    try {
+        const { name, description, number_contract, serie } = req.body;
+        if (!name) {
+            return res.status(400).json({ success: false, message: 'Nome do contrato é obrigatório.' });
+        }
+        const result = await db.createContract({ name, description, number_contract, serie });
+        res.json({ success: true, id: result.id, message: 'Contrato criado com sucesso.' });
+    } catch (error) {
+        console.error('Error creating Contract:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.put('/api/contracts/:id', async (req, res) => {
+    try {
+        const { name, description, number_contract, serie } = req.body;
+        if (!name) {
+            return res.status(400).json({ success: false, message: 'Nome do contrato é obrigatório.' });
+        }
+        await db.updateContract(req.params.id, { name, description, number_contract, serie });
+        res.json({ success: true, message: 'Contrato atualizado com sucesso.' });
+    } catch (error) {
+        console.error('Error updating Contract:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+app.delete('/api/contracts/:id', async (req, res) => {
+    try {
+        // Validação de Integridade: Impedir exclusão se houver obras vinculadas
+        const linkedObras = await db.getObrasByContractId(req.params.id);
+        if (linkedObras && linkedObras.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Não é permitido excluir um contrato com obras vinculadas. Remova as obras primeiro.' 
+            });
+        }
+        await db.deleteContract(req.params.id);
+        res.json({ success: true, message: 'Contrato removido com sucesso.' });
+    } catch (error) {
+        console.error('Error deleting Contract:', error);
         res.status(500).json({ success: false, error: error.message });
     }
 });

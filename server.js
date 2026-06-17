@@ -572,6 +572,48 @@ app.get('/api/employees/:employeeId/trajectory', async (req, res) => {
     }
 });
 
+/**
+ * Rota para obter todos os funcionários únicos ativos nos últimos 45 dias
+ * baseando-se no histórico de batidas em checks_history.json e alocações do SQLite
+ */
+app.get('/api/employees', async (req, res) => {
+    try {
+        const historyPath = path.join(__dirname, 'checks_history.json');
+        const employeesMap = {};
+        
+        // 1. Coletar do histórico de batidas (Tangerino)
+        if (fs.existsSync(historyPath)) {
+            const data = JSON.parse(fs.readFileSync(historyPath, 'utf8'));
+            data.forEach(run => {
+                const addEmp = p => {
+                    if (p.employeeId) employeesMap[p.employeeId] = p.employeeName;
+                };
+                (run.allPunchesToday || []).forEach(addEmp);
+                (run.allPunchesYesterday || []).forEach(addEmp);
+            });
+        }
+        
+        // 2. Coletar das alocações existentes no SQLite
+        const allocations = await db.getAllocations();
+        allocations.forEach(a => {
+            employeesMap[a.employee_id] = a.employee_name;
+        });
+        
+        const list = Object.keys(employeesMap).map(id => ({
+            id,
+            name: employeesMap[id]
+        }));
+        
+        // Ordenar alfabeticamente
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        
+        res.json({ success: true, employees: list });
+    } catch (error) {
+        console.error('Erro ao listar funcionários:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 
 // Setup scheduled daily background checks using node-cron
 if (cron.validate(CRON_SCHEDULE)) {

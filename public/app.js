@@ -340,7 +340,7 @@ async function loadRealTimeData() {
             activeAlertCountEl.textContent = `${currentRunData.alertsCount} Desvio${currentRunData.alertsCount !== 1 ? 's' : ''}`;
             
             // Populate employee selection dropdown for allocations
-            populateEmployeeDropdown();
+            await populateEmployeeDropdown();
             
             // Update Tab counts
             updateTabCounts();
@@ -1052,17 +1052,33 @@ function renderAllocationsList() {
 }
 
 // Populate employee select dropdown dynamically based on yesterday/today punches
-function populateEmployeeDropdown() {
-    if (!currentRunData) return;
+async function populateEmployeeDropdown() {
+    try {
+        const response = await authenticatedFetch('/api/employees');
+        const data = await response.json();
+        if (data.success) {
+            uniqueEmployees = data.employees;
+            return;
+        }
+    } catch (e) {
+        console.error('Erro ao carregar colaboradores para alocação:', e);
+    }
     
-    // Find unique employees in punches
+    // Fallback local caso o endpoint de funcionários falhe
     const employees = {};
     const addEmployee = (p) => {
         employees[p.employeeId] = p.employeeName;
     };
     
-    (currentRunData.allPunchesToday || []).forEach(addEmployee);
-    (currentRunData.allPunchesYesterday || []).forEach(addEmployee);
+    if (currentRunData) {
+        (currentRunData.allPunchesToday || []).forEach(addEmployee);
+        (currentRunData.allPunchesYesterday || []).forEach(addEmployee);
+    }
+    
+    // Garantir que colaboradores alocados também estejam incluídos
+    employeeAllocations.forEach(a => {
+        employees[a.employee_id] = a.employee_name;
+    });
     
     // Convert to array
     const list = [];

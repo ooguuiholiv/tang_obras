@@ -1411,36 +1411,66 @@ window.handleQuickAllocation = async (employeeId, employeeName, obraIdStr) => {
     }
 };
 
+// Helper to generate a consistent HSL color based on the contract ID
+function getContractColor(contractId) {
+    if (!contractId) {
+        return '#f59e0b'; // Standard orange fallback if no contract is bound
+    }
+    
+    // Hash contractId string to a number
+    let hash = 0;
+    for (let i = 0; i < contractId.length; i++) {
+        hash = contractId.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    // Generate hue value between 0 and 360
+    const hue = Math.abs(hash) % 360;
+    
+    // High saturation and balanced light for standard HSL color
+    return `hsl(${hue}, 85%, 55%)`;
+}
+
 // Draw construction site fences on the map
 function plotObrasOnMap() {
     if (!map) return;
     obrasLayer.clearLayers();
     
     registeredObras.forEach(o => {
-        // Obra marker (Orange building circle)
+        const color = getContractColor(o.contract_id);
+        
+        // Obra marker (Building circle marker with contract color)
         const marker = L.circleMarker([o.latitude, o.longitude], {
             radius: 8,
-            fillColor: '#f59e0b',
-            color: '#d97706',
+            fillColor: color,
+            color: '#ffffff',
             weight: 2,
             opacity: 1,
-            fillOpacity: 0.9
+            fillOpacity: 0.95
         }).bindPopup(`
             <div style="font-family: Inter, sans-serif; font-size: 12px; color: #ffffff;">
-                <strong style="color: #fbbf24;"><i class="fa-solid fa-helmet-safety"></i> Obra: ${o.name}</strong><br>
+                <strong style="color: ${color};"><i class="fa-solid fa-helmet-safety"></i> Obra: ${o.name}</strong><br>
+                <b>Contrato:</b> ${o.contract_name || 'Sem Contrato'}<br>
                 <b>Endereço:</b> ${o.address || 'Sem Endereço'}<br>
                 <b>Raio da Cerca:</b> ${o.radius_km} km
             </div>
         `);
         
-        // Obra radius circle (translucent orange geofence)
+        // Obra radius circle (translucent geofence with contract color)
         const geofence = L.circle([o.latitude, o.longitude], {
             radius: o.radius_km * 1000, // Leaflet uses meters
-            color: '#fbbf24',
-            weight: 1,
-            fillColor: '#fbbf24',
-            fillOpacity: 0.12,
-            dashArray: '4, 4'
+            color: color,
+            weight: 1.5,
+            opacity: 0.8,
+            fillColor: color,
+            fillOpacity: 0.15,
+            dashArray: '5, 5'
+        });
+        
+        // Bind a permanent centered tooltip showing the construction site (obra) name
+        geofence.bindTooltip(`<div class="map-obra-tooltip-inner" style="border-left: 3px solid ${color};">${o.name}</div>`, {
+            permanent: true,
+            direction: 'center',
+            className: 'map-obra-tooltip'
         });
         
         obrasLayer.addLayer(marker);
@@ -1912,26 +1942,37 @@ function renderTrajectoryOnMap(punches, employeeName, obraAlocada) {
         const obraLatLng = [obraAlocada.latitude, obraAlocada.longitude];
         bounds.extend(obraLatLng);
         
-        // Círculo representando o raio real da obra alocada
-        L.circle(obraLatLng, {
+        const color = getContractColor(obraAlocada.contract_id);
+        
+        // Círculo representando o raio real da obra alocada (com cor de acordo com o contrato)
+        const geofence = L.circle(obraLatLng, {
             radius: obraAlocada.radius_km * 1000, // em metros
-            color: '#3b82f6',
-            fillColor: '#3b82f6',
-            fillOpacity: 0.1,
+            color: color,
+            fillColor: color,
+            fillOpacity: 0.12,
             weight: 2,
             dashArray: '4, 6'
-        }).addTo(markersLayer);
+        });
+        
+        // Tooltip permanente com nome da obra alocada
+        geofence.bindTooltip(`<div class="map-obra-tooltip-inner" style="border-left: 3px solid ${color};">${obraAlocada.name}</div>`, {
+            permanent: true,
+            direction: 'center',
+            className: 'map-obra-tooltip'
+        });
+        
+        geofence.addTo(markersLayer);
         
         // Marcador central da obra
         L.circleMarker(obraLatLng, {
             radius: 8,
             color: '#ffffff',
-            fillColor: '#3b82f6',
+            fillColor: color,
             fillOpacity: 1,
             weight: 2
         }).bindPopup(`
             <div style="font-family: var(--font-body); font-size: 13px;">
-                <h4 style="margin: 0 0 4px 0; color: #3b82f6;">Obra Alocada: ${obraAlocada.name}</h4>
+                <h4 style="margin: 0 0 4px 0; color: ${color};">Obra Alocada: ${obraAlocada.name}</h4>
                 <b>Endereço:</b> ${obraAlocada.address || 'Sem endereço'}<br>
                 <b>Cerca configurada:</b> ${obraAlocada.radius_km} km
             </div>
